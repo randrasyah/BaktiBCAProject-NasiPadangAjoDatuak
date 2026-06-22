@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { calcOrderAmounts, ORDER_CODE_PREFIX } from "@ajo/shared";
 import { createAdminClient } from "../../../lib/supabase-admin";
@@ -28,6 +29,18 @@ function jakartaYmd(): string {
 
 function pad4(n: number): string {
   return String(n).padStart(4, "0");
+}
+
+// Token acak singkat agar order_code (= order_id Midtrans) UNIK GLOBAL.
+// Midtrans menolak order_id yang pernah dipakai (HTTP 409 conflict), sedangkan
+// nomor urut harian berbasis count bisa terulang setelah order dihapus dari DB.
+// Token ini mencegah tabrakan itu (dan memutus loop retry saat charge gagal).
+function randToken(len = 4): string {
+  const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // tanpa 0/O/1/I yang mirip
+  const bytes = randomBytes(len);
+  let s = "";
+  for (let i = 0; i < len; i++) s += chars[bytes[i] % chars.length];
+  return s;
 }
 
 export async function POST(req: Request) {
@@ -94,7 +107,10 @@ export async function POST(req: Request) {
   );
   const { subtotal, tax, total } = calcOrderAmounts(subtotalRaw);
 
-  // --- Buat order_code unik AJD-YYYYMMDD-NNNN, dengan retry bila bentrok ---
+  // --- Buat order_code unik AJD-YYYYMMDD-NNNN-XXXX, dengan retry bila bentrok ---
+  // NNNN = nomor urut harian (mudah dibaca); -XXXX = token acak yang menjamin
+  // order_code (= order_id Midtrans) UNIK GLOBAL meski nomor urut terulang
+  // setelah penghapusan order (mencegah 409 conflict dari Midtrans).
   const prefix = `${ORDER_CODE_PREFIX}-${jakartaYmd()}-`;
   const { count } = await supabase
     .from("orders")
@@ -105,7 +121,7 @@ export async function POST(req: Request) {
   let orderId: string | null = null;
   let orderCode = "";
   for (let attempt = 0; attempt < 10; attempt++) {
-    orderCode = prefix + pad4(seq);
+    orderCode = `${prefix}${pad4(seq)}-${randToken()}`;
     const { data, error } = await supabase
       .from("orders")
       .insert({
