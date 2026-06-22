@@ -1,0 +1,13 @@
+{
+  "name": "@ajo/shared",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.ts",
+  "types": "index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./types": "./types.ts",
+    "./money": "./money.ts",
+    "./constants": "./constants.ts"
+  }
+}

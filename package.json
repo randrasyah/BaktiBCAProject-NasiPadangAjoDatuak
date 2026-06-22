@@ -1,0 +1,16 @@
+{
+  "name": "ajo-datuak",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sistem ordering Nasi Padang Ajo Datuak — monorepo (customer + admin + shared).",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:customer": "npm run dev --workspace apps/customer",
+    "dev:admin": "npm run dev --workspace apps/admin",
+    "build:customer": "npm run build --workspace apps/customer",
+    "build:admin": "npm run build --workspace apps/admin"
+  }
+}

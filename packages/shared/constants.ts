@@ -1,0 +1,26 @@
+// constants.ts — konstanta bersama. Lihat CLAUDE.md §5.1, §8.
+// Tuple `as const` dipakai juga untuk menurunkan tipe union di types.ts.
+
+// Status order — harus sama persis dengan CHECK di tabel orders (schema.sql §1.2).
+export const ORDER_STATUSES = [
+  "pending",
+  "paid",
+  "completed",
+  "expired",
+  "cancelled",
+] as const;
+
+// Kategori menu — harus sama persis dengan CHECK di tabel menu_items (schema.sql §1.1)
+// dan urutan tampil di halaman menu (CLAUDE.md §5.1).
+export const MENU_CATEGORIES = [
+  "Paket",
+  "Mandatory",
+  "Lauk",
+  "Minuman",
+] as const;
+
+// Harga placeholder seragam semua item (CLAUDE.md §2 poin 4).
+export const DEFAULT_PRICE = 15000;
+
+// Prefix order_code human-readable, mis. AJD-20260622-0001 (CLAUDE.md §8.2, §13).
+export const ORDER_CODE_PREFIX = "AJD";
