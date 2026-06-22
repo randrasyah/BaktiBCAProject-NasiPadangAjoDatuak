@@ -83,7 +83,7 @@ export default async function PayPage({
       <p className="mt-5 max-w-xs text-center text-sm text-brown-400">
         Scan untuk membayar. Selama pengembangan, bayar lewat{" "}
         <a
-          href="https://simulator.sandbox.midtrans.com/"
+          href="https://simulator.sandbox.midtrans.com/v2/qris/index"
           target="_blank"
           rel="noopener noreferrer"
           className="font-semibold text-brown-600 underline underline-offset-2"
@@ -92,6 +92,21 @@ export default async function PayPage({
         </a>
         .
       </p>
+
+      {/* Helper dev: tampilkan QR Code Image URL agar bisa langsung ditempel ke
+          field "QR Code Image URL" di simulator. Hanya muncul di Sandbox. */}
+      {process.env.MIDTRANS_IS_PRODUCTION !== "true" && order.qris_url && (
+        <details className="mt-3 w-full rounded-xl border border-tan-200 bg-cream-100 px-4 py-3 text-xs text-brown-600">
+          <summary className="cursor-pointer font-semibold">
+            Dev: QR Code Image URL (untuk Simulator)
+          </summary>
+          <p className="mt-2 select-all break-all font-mono text-brown-800">{order.qris_url}</p>
+          <p className="mt-2 text-brown-400">
+            Buka Simulator → QRIS → tempel URL di atas ke field “QR Code Image URL” →
+            Inquiry → Pay. Status akan otomatis jadi lunas dalam beberapa detik.
+          </p>
+        </details>
+      )}
 
       <div className="mt-6 w-full rounded-2xl border border-tan-200 bg-white p-5 shadow-[0_4px_20px_rgba(92,61,46,0.08)]">
         <div className="flex items-center justify-between">

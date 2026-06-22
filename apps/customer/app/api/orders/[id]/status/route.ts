@@ -6,8 +6,8 @@ export const dynamic = "force-dynamic";
 
 // Polling status order untuk halaman pembayaran (CLAUDE.md §5.3, §8.6).
 // HANYA BACA. Route ini tidak pernah menulis status — `paid` eksklusif webhook
-// (iterasi berikutnya, di apps/admin). anon tak punya policy SELECT `orders`,
-// jadi customer memantau lewat route server (service role) ini.
+// (di apps/admin). anon tak punya policy SELECT `orders`, jadi customer memantau
+// lewat route server (service role) ini.
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
