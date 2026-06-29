@@ -7,7 +7,9 @@ import { getBrowserClient } from "../../../lib/supabase-browser";
 
 type OrderWithItems = Order & { order_items: OrderItem[] };
 
-const ACTIVE_STATUSES = ["pending", "paid"] as const;
+// Order aktif (masih ditangani admin): pending -> preparing -> paid.
+// 'completed' (+ expired/cancelled lama) masuk ke tab Riwayat.
+const ACTIVE_STATUSES = ["pending", "preparing", "paid"] as const;
 
 function formatTime(iso: string): string {
   return new Intl.DateTimeFormat("id-ID", {
@@ -17,9 +19,15 @@ function formatTime(iso: string): string {
   }).format(new Date(iso));
 }
 
-// Label status penyajian.
-function servingLabel(status: string): { text: string; cls: string } {
+// Label status order (lifecycle manual tanpa pembayaran online, 2026-06-29).
+function statusLabel(status: string): { text: string; cls: string } {
   switch (status) {
+    case "pending":
+      return { text: "Masuk", cls: "bg-accent/15 text-accent" };
+    case "preparing":
+      return { text: "Disajikan", cls: "bg-brown-400/15 text-brown-600" };
+    case "paid":
+      return { text: "Sudah Dibayar", cls: "bg-[#6FA86A]/15 text-[#3f6b34]" };
     case "completed":
       return { text: "Selesai", cls: "bg-[#6FA86A]/15 text-[#3f6b34]" };
     case "expired":
@@ -27,7 +35,24 @@ function servingLabel(status: string): { text: string; cls: string } {
     case "cancelled":
       return { text: "Dibatalkan", cls: "bg-[#D96C6C]/15 text-[#9b2c2c]" };
     default:
-      return { text: "Diproses", cls: "bg-accent/15 text-accent" };
+      return { text: status, cls: "bg-tan-200 text-brown-600" };
+  }
+}
+
+// Aksi berikutnya yang bisa dilakukan admin untuk memajukan order.
+// pending -> "Proses Pesanan" -> preparing -> "Sudah Dibayar" -> paid ->
+// "Selesai" -> completed. (RLS hanya mengizinkan target preparing/paid/completed.)
+type NextStatus = "preparing" | "paid" | "completed";
+function nextAction(status: string): { label: string; next: NextStatus } | null {
+  switch (status) {
+    case "pending":
+      return { label: "Proses Pesanan", next: "preparing" };
+    case "preparing":
+      return { label: "Sudah Dibayar", next: "paid" };
+    case "paid":
+      return { label: "Selesai", next: "completed" };
+    default:
+      return null;
   }
 }
 
@@ -83,18 +108,19 @@ export default function OrdersPage() {
     };
   }, [load]);
 
-  async function markComplete(id: string) {
+  // Memajukan order ke status berikutnya (manual). Set timestamp sesuai target:
+  // paid -> paid_at, completed -> completed_at. RLS mengizinkan admin menulis
+  // preparing/paid/completed (CLAUDE.md §8.6).
+  async function advance(id: string, next: NextStatus) {
     setBusyId(id);
     setError(null);
     const supabase = getBrowserClient();
-    // Admin HANYA boleh menghasilkan status 'completed' (RLS with check).
-    // Mencoba men-set 'paid' dari sini akan DITOLAK RLS. (CLAUDE.md §4/§8.6)
-    const { error } = await supabase
-      .from("orders")
-      .update({ status: "completed", completed_at: new Date().toISOString() })
-      .eq("id", id);
+    const patch: Record<string, unknown> = { status: next };
+    if (next === "paid") patch.paid_at = new Date().toISOString();
+    if (next === "completed") patch.completed_at = new Date().toISOString();
+    const { error } = await supabase.from("orders").update(patch).eq("id", id);
     if (error) {
-      setError("Gagal menandai selesai. Coba lagi.");
+      setError("Gagal memperbarui pesanan. Coba lagi.");
     }
     await load();
     setBusyId(null);
@@ -151,9 +177,8 @@ export default function OrdersPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {filtered.map((order) => {
-            const paid = !!order.paid_at;
-            const serving = servingLabel(order.status);
-            const canComplete = order.status === "pending" || order.status === "paid";
+            const badge = statusLabel(order.status);
+            const action = nextAction(order.status);
             return (
               <article
                 key={order.id}
@@ -165,9 +190,9 @@ export default function OrdersPage() {
                     <p className="text-sm text-brown-600">Meja {order.table_number}</p>
                   </div>
                   <span
-                    className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${serving.cls}`}
+                    className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${badge.cls}`}
                   >
-                    {serving.text}
+                    {badge.text}
                   </span>
                 </div>
 
@@ -191,15 +216,8 @@ export default function OrdersPage() {
                     ))}
                 </ul>
 
-                {/* Total + pembayaran */}
-                <div className="mt-3 flex items-center justify-between border-t border-tan-200 pt-3">
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs font-bold ${
-                      paid ? "bg-[#6FA86A]/15 text-[#3f6b34]" : "bg-accent/15 text-accent"
-                    }`}
-                  >
-                    {paid ? "Sudah Dibayar" : "Belum Dibayar"}
-                  </span>
+                {/* Total */}
+                <div className="mt-3 flex items-center justify-end border-t border-tan-200 pt-3">
                   <span className="text-lg font-bold text-brown-800">
                     {formatRupiah(order.total)}
                   </span>
@@ -207,20 +225,20 @@ export default function OrdersPage() {
 
                 <p className="mt-2 text-xs text-brown-400">{formatTime(order.created_at)}</p>
 
-                {/* Aksi */}
+                {/* Aksi — maju satu tahap: Proses Pesanan → Sudah Dibayar → Selesai */}
                 <div className="mt-4">
                   {order.status === "completed" ? (
                     <div className="rounded-xl bg-[#6FA86A]/10 py-2.5 text-center text-sm font-bold text-[#3f6b34]">
                       ✓ Selesai
                     </div>
-                  ) : canComplete ? (
+                  ) : action ? (
                     <button
                       type="button"
-                      onClick={() => markComplete(order.id)}
+                      onClick={() => advance(order.id, action.next)}
                       disabled={busyId === order.id}
                       className="w-full rounded-xl bg-brown-600 py-2.5 text-sm font-bold text-cream-50 transition-colors hover:bg-brown-800 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {busyId === order.id ? "Menyimpan…" : "Tandai Selesai"}
+                      {busyId === order.id ? "Menyimpan…" : action.label}
                     </button>
                   ) : null}
                 </div>

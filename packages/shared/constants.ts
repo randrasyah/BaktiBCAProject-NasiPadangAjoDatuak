@@ -2,8 +2,16 @@
 // Tuple `as const` dipakai juga untuk menurunkan tipe union di types.ts.
 
 // Status order — harus sama persis dengan CHECK di tabel orders (schema.sql §1.2).
+// Lifecycle baru (TANPA pembayaran online — keputusan 2026-06-29): order diproses
+// MANUAL oleh admin: pending -> preparing -> paid -> completed.
+//   pending    = pesanan baru masuk (belum disentuh admin)
+//   preparing  = admin klik "Proses Pesanan" (customer: "Sedang Disajikan")
+//   paid        = admin klik "Sudah Dibayar" (bayar langsung di tempat / tunai)
+//   completed   = admin klik "Selesai"
+// expired/cancelled = sisa alur pembayaran Midtrans (dipertahankan untuk future use).
 export const ORDER_STATUSES = [
   "pending",
+  "preparing",
   "paid",
   "completed",
   "expired",

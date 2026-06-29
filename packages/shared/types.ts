@@ -26,8 +26,8 @@ export interface Order {
   table_number: string;
   status: OrderStatus;
   subtotal: number; // integer rupiah
-  tax: number; // integer rupiah (PB1 10%)
-  total: number; // integer rupiah (subtotal + tax = gross_amount Midtrans)
+  tax: number; // integer rupiah; 0 sejak 2026-06-29 (harga sudah termasuk pajak)
+  total: number; // integer rupiah (= subtotal; tax 0)
   midtrans_transaction_id: string | null;
   payment_type: string | null;
   paid_at: string | null;

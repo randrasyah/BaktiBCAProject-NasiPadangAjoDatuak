@@ -34,16 +34,18 @@ create table if not exists menu_items (
 );
 
 -- 1.2 orders — header pesanan. Lihat CLAUDE.md §8.2.
--- status: 'pending' | 'paid' | 'completed' | 'expired' | 'cancelled'
+-- status (lifecycle manual tanpa pembayaran online, 2026-06-29):
+--   'pending' -> 'preparing' -> 'paid' -> 'completed' (dimajukan admin).
+--   'expired'/'cancelled' = sisa alur Midtrans (dipertahankan untuk future use).
 create table if not exists orders (
   id            uuid primary key default gen_random_uuid(),
   order_code    text unique not null,             -- human-readable, mis. AJD-20260622-0001
   table_number  text not null,
   status        text not null default 'pending'
-                  check (status in ('pending','paid','completed','expired','cancelled')),
+                  check (status in ('pending','preparing','paid','completed','expired','cancelled')),
   subtotal      integer not null,                 -- jumlah harga item (rupiah, integer)
-  tax           integer not null,                 -- PB1 / Pajak Restoran 10%
-  total         integer not null,                 -- subtotal + tax (= gross_amount Midtrans)
+  tax           integer not null,                 -- pajak; 0 sejak 2026-06-29 (harga sudah termasuk pajak)
+  total         integer not null,                 -- = subtotal (tax 0). (= gross_amount Midtrans bila pembayaran dihidupkan)
   -- data pembayaran (diisi oleh webhook / service role)
   midtrans_transaction_id text,
   payment_type            text,
@@ -147,25 +149,27 @@ create policy "orders_select_admin"
   to authenticated
   using (true);
 
---   UPDATE: authenticated (admin) boleh menandai order 'completed' dari status
---           MANA PUN (disederhanakan — keputusan pemilik 2026-06-22; tidak ada
---           lagi syarat harus 'paid' dulu).
+--   UPDATE: authenticated (admin) memajukan order secara MANUAL melalui
+--           lifecycle pending -> preparing -> paid -> completed
+--           (keputusan pemilik 2026-06-29: tidak ada pembayaran online lagi,
+--           admin yang menandai "Sudah Dibayar" untuk bayar di tempat).
 --           USING (true): admin boleh menyentuh baris order apa pun.
---           WITH CHECK (status = 'completed'): hasil update wajib 'completed',
---           sehingga admin TETAP tidak bisa men-set 'paid' (itu eksklusif
---           webhook/service role, CLAUDE.md §4).
+--           WITH CHECK (status in ('preparing','paid','completed')): hasil update
+--           hanya boleh salah satu dari tiga status itu — admin TIDAK bisa
+--           mengembalikan ke 'pending' atau men-set 'expired'/'cancelled'.
 drop policy if exists "orders_update_complete_admin" on orders;
-create policy "orders_update_complete_admin"
+drop policy if exists "orders_update_admin" on orders;
+create policy "orders_update_admin"
   on orders
   for update
   to authenticated
   using (true)
-  with check (status = 'completed');
+  with check (status in ('preparing','paid','completed'));
 
 --   TIDAK ADA policy INSERT untuk anon/authenticated:
---     pembuatan order hanya lewat /api/checkout (service role, bypass RLS).
---   TIDAK ADA policy yang mengizinkan set status 'paid':
---     hanya webhook Midtrans (service role) yang menulis 'paid'. (CLAUDE.md §4 ⚠)
+--     pembuatan order hanya lewat /api/order (service role, bypass RLS).
+--   'expired'/'cancelled' hanya bisa di-set service role (webhook Midtrans,
+--     bila pembayaran online dihidupkan lagi — future use).
 
 -- 3.3 order_items
 --   SELECT: hanya admin (authenticated) — untuk rincian order & laporan.

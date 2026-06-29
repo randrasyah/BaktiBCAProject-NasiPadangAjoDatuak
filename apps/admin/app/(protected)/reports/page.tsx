@@ -28,7 +28,8 @@ function formatTime(iso: string): string {
 }
 
 const STATUS_LABEL: Record<string, { text: string; cls: string }> = {
-  pending: { text: "Belum Bayar", cls: "bg-accent/15 text-accent" },
+  pending: { text: "Masuk", cls: "bg-accent/15 text-accent" },
+  preparing: { text: "Disajikan", cls: "bg-brown-400/15 text-brown-600" },
   paid: { text: "Dibayar", cls: "bg-[#6FA86A]/15 text-[#3f6b34]" },
   completed: { text: "Selesai", cls: "bg-[#6FA86A]/15 text-[#3f6b34]" },
   expired: { text: "Kedaluwarsa", cls: "bg-tan-200 text-brown-600" },
@@ -131,15 +132,13 @@ export default function ReportsPage() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-tan-200 bg-white shadow-[0_4px_20px_rgba(92,61,46,0.06)]">
-          <table className="w-full min-w-[860px] text-left text-sm">
+          <table className="w-full min-w-[720px] text-left text-sm">
             <thead>
               <tr className="border-b border-tan-200 bg-cream-100 text-xs uppercase tracking-wider text-brown-400">
                 <th className="px-4 py-3 font-bold">No. Pesanan</th>
                 <th className="px-4 py-3 font-bold">Waktu</th>
                 <th className="px-4 py-3 font-bold">Meja</th>
                 <th className="px-4 py-3 font-bold">Item</th>
-                <th className="px-4 py-3 text-right font-bold">Subtotal</th>
-                <th className="px-4 py-3 text-right font-bold">Pajak</th>
                 <th className="px-4 py-3 text-right font-bold">Total</th>
                 <th className="px-4 py-3 font-bold">Status</th>
               </tr>
@@ -158,12 +157,6 @@ export default function ReportsPage() {
                     </td>
                     <td className="px-4 py-3 text-brown-600">{o.table_number}</td>
                     <td className="max-w-xs px-4 py-3 text-brown-900">{itemSummary(o)}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right text-brown-600">
-                      {formatRupiah(o.subtotal)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 text-right text-brown-600">
-                      {formatRupiah(o.tax)}
-                    </td>
                     <td className="whitespace-nowrap px-4 py-3 text-right font-bold text-brown-800">
                       {formatRupiah(o.total)}
                     </td>

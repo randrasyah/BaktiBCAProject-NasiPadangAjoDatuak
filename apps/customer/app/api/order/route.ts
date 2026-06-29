@@ -2,10 +2,19 @@ import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { calcOrderAmounts, ORDER_CODE_PREFIX } from "@ajo/shared";
 import { createAdminClient } from "../../../lib/supabase-admin";
-import { chargeQris, type ChargeItem } from "../../../lib/midtrans";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+// =====================================================================
+// /api/order — buat order TANPA pembayaran online (keputusan 2026-06-29).
+// Hanya insert `orders` (status 'pending') + `order_items` via service role,
+// lalu kembalikan id agar customer diarahkan ke halaman lacak status
+// (/order/[orderId]). Pemrosesan & "Sudah Dibayar" dilakukan MANUAL oleh admin.
+//
+// Catatan: route pembayaran Midtrans tetap ada di /api/checkout (dipertahankan
+// untuk future use). Route ini sengaja TIDAK memanggil Midtrans.
+// =====================================================================
 
 // Item yang diterima dari client. Harga & nama TIDAK dipercaya dari client —
 // keduanya di-snapshot dari DB (authoritative). Lihat security note CLAUDE.md §13.
@@ -17,7 +26,6 @@ interface IncomingItem {
 
 // Tanggal lokal Asia/Jakarta (WIB) -> "YYYYMMDD" untuk order_code.
 function jakartaYmd(): string {
-  // en-CA menghasilkan format YYYY-MM-DD.
   const s = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Jakarta",
     year: "numeric",
@@ -31,12 +39,10 @@ function pad4(n: number): string {
   return String(n).padStart(4, "0");
 }
 
-// Token acak singkat agar order_code (= order_id Midtrans) UNIK GLOBAL.
-// Midtrans menolak order_id yang pernah dipakai (HTTP 409 conflict), sedangkan
-// nomor urut harian berbasis count bisa terulang setelah order dihapus dari DB.
-// Token ini mencegah tabrakan itu (dan memutus loop retry saat charge gagal).
+// Token acak singkat agar order_code UNIK GLOBAL (mencegah tabrakan nomor urut
+// setelah penghapusan order). Charset tanpa 0/O/1/I yang mirip.
 function randToken(len = 4): string {
-  const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // tanpa 0/O/1/I yang mirip
+  const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
   const bytes = randomBytes(len);
   let s = "";
   for (let i = 0; i < len; i++) s += chars[bytes[i] % chars.length];
@@ -54,10 +60,7 @@ export async function POST(req: Request) {
   // --- Validasi nomor meja (wajib, numerik) ---
   const tableNumber = String(body.table_number ?? "").trim();
   if (!tableNumber || !/^\d+$/.test(tableNumber)) {
-    return NextResponse.json(
-      { error: "Nomor meja wajib diisi (angka)." },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "Nomor meja wajib diisi (angka)." }, { status: 400 });
   }
 
   // --- Validasi item ---
@@ -87,9 +90,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Gagal memuat menu." }, { status: 500 });
   }
   const menuMap = new Map(
-    (menuRows ?? []).map((m) => [m.id as string, m as { id: string; name: string; price: number; is_available: boolean }]),
+    (menuRows ?? []).map((m) => [
+      m.id as string,
+      m as { id: string; name: string; price: number; is_available: boolean },
+    ]),
   );
-  // Pastikan semua item ada & tersedia.
   for (const it of items) {
     const m = menuMap.get(it.id);
     if (!m || !m.is_available) {
@@ -100,7 +105,8 @@ export async function POST(req: Request) {
     }
   }
 
-  // --- Hitung biaya SERVER-SIDE (sumber kebenaran) ---
+  // --- Hitung biaya SERVER-SIDE (sumber kebenaran). tax = 0 (harga sudah
+  //     termasuk pajak), total = subtotal. ---
   const subtotalRaw = items.reduce(
     (sum, it) => sum + menuMap.get(it.id)!.price * it.quantity,
     0,
@@ -108,9 +114,6 @@ export async function POST(req: Request) {
   const { subtotal, tax, total } = calcOrderAmounts(subtotalRaw);
 
   // --- Buat order_code unik AJD-YYYYMMDD-NNNN-XXXX, dengan retry bila bentrok ---
-  // NNNN = nomor urut harian (mudah dibaca); -XXXX = token acak yang menjamin
-  // order_code (= order_id Midtrans) UNIK GLOBAL meski nomor urut terulang
-  // setelah penghapusan order (mencegah 409 conflict dari Midtrans).
   const prefix = `${ORDER_CODE_PREFIX}-${jakartaYmd()}-`;
   const { count } = await supabase
     .from("orders")
@@ -127,7 +130,7 @@ export async function POST(req: Request) {
       .insert({
         order_code: orderCode,
         table_number: tableNumber,
-        status: "pending", // status awal — TIDAK pernah di-set dari client
+        status: "pending", // status awal — admin yang memajukan secara manual
         subtotal,
         tax,
         total,
@@ -172,66 +175,6 @@ export async function POST(req: Request) {
     // Best-effort cleanup: hapus order yatim agar tak ada order tanpa item.
     await supabase.from("orders").delete().eq("id", orderId);
     return NextResponse.json({ error: "Gagal menyimpan item order." }, { status: 500 });
-  }
-
-  // --- Charge QRIS ke Midtrans (server-side) ---
-  // item_details = baris menu + 1 baris pajak, agar jumlahnya == gross_amount (total).
-  // (CLAUDE.md §7.1: total item_details WAJIB sama dengan gross_amount.)
-  const chargeItems: ChargeItem[] = items.map((it) => {
-    const m = menuMap.get(it.id)!;
-    return { id: it.id, price: m.price, quantity: it.quantity, name: m.name };
-  });
-  // Baris pajak hanya bila tax > 0 (Midtrans menolak item ber-harga 0).
-  // Sejak 2026-06-29 pajak = 0 (harga sudah termasuk pajak), jadi baris ini
-  // di-skip; dipertahankan agar charge tetap benar bila pajak dihidupkan lagi.
-  if (tax > 0) {
-    chargeItems.push({
-      id: "tax",
-      price: tax,
-      quantity: 1,
-      name: "Pajak Restoran",
-    });
-  }
-
-  // Invariant §13: Σ(item_details) — termasuk baris pajak — WAJIB == gross_amount.
-  // Kalau tidak, Midtrans menolak charge. Guard agar bug perhitungan tertangkap
-  // sebelum memanggil Midtrans (dan tak meninggalkan order menggantung).
-  const itemsSum = chargeItems.reduce((s, it) => s + it.price * it.quantity, 0);
-  if (itemsSum !== total) {
-    await supabase.from("orders").delete().eq("id", orderId);
-    return NextResponse.json(
-      { error: "Validasi jumlah pembayaran gagal." },
-      { status: 500 },
-    );
-  }
-
-  let charge;
-  try {
-    charge = await chargeQris({
-      orderId: orderCode, // order_id Midtrans = order_code (unik)
-      grossAmount: total,
-      items: chargeItems,
-    });
-  } catch (e) {
-    // Charge gagal → buang order + item agar tak ada order menggantung tanpa QR.
-    await supabase.from("orders").delete().eq("id", orderId);
-    const msg = e instanceof Error ? e.message : "Gagal membuat pembayaran QRIS.";
-    return NextResponse.json({ error: msg }, { status: 502 });
-  }
-
-  // --- Simpan data QRIS ke order (dibaca /pay/[orderId]) ---
-  const { error: updErr } = await supabase
-    .from("orders")
-    .update({
-      midtrans_transaction_id: charge.transactionId || null,
-      payment_type: charge.paymentType || "qris",
-      qris_string: charge.qrString,
-      qris_url: charge.qrImageUrl,
-      qris_expiry: charge.expiryTime,
-    })
-    .eq("id", orderId);
-  if (updErr) {
-    return NextResponse.json({ error: "Gagal menyimpan data pembayaran." }, { status: 500 });
   }
 
   return NextResponse.json({ id: orderId, order_code: orderCode, total }, { status: 201 });

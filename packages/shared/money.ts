@@ -1,8 +1,11 @@
 // money.ts — util uang & pajak. Lihat CLAUDE.md §5.2, §7.1, §13.
 // Semua nilai rupiah adalah INTEGER (tanpa desimal). total = gross_amount Midtrans.
 
-// PB1 / Pajak Restoran 10% (CLAUDE.md §2 poin 2).
-export const TAX_RATE = 0.1;
+// Pajak: 0% — keputusan pemilik 2026-06-29. Harga menu SUDAH termasuk pajak,
+// jadi tidak ada PB1 yang ditambahkan di atas subtotal. tax selalu 0 & total =
+// subtotal. Konstanta & fungsi tax dipertahankan (API stabil) agar mudah
+// dihidupkan lagi bila kebijakan pajak berubah. (Dulu PB1 10%.)
+export const TAX_RATE = 0;
 
 /**
  * Format angka rupiah integer menjadi string, mis. 15000 -> "Rp 15.000".

@@ -52,7 +52,10 @@ function CheckoutForm() {
     }
     setSubmitting(true);
     try {
-      const res = await fetch("/api/checkout", {
+      // Tanpa pembayaran online (keputusan 2026-06-29): buat order lalu lacak
+      // statusnya. Route pembayaran (/api/checkout + /pay) dipertahankan untuk
+      // future use.
+      const res = await fetch("/api/order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -67,7 +70,7 @@ function CheckoutForm() {
         return;
       }
       clear();
-      router.push(`/pay/${data.id}`);
+      router.push(`/order/${data.id}`);
     } catch {
       setError("Tidak bisa terhubung ke server. Coba lagi.");
       setSubmitting(false);
@@ -156,20 +159,13 @@ function CheckoutForm() {
             ))}
           </ul>
 
-          {/* Rincian biaya */}
-          <section className="mt-6 space-y-2 rounded-2xl border border-tan-200 bg-cream-100 p-5">
-            <div className="flex justify-between text-brown-600">
-              <span>Subtotal</span>
-              <span>{formatRupiah(amounts.subtotal)}</span>
-            </div>
-            <div className="flex justify-between text-brown-600">
-              <span>Pajak Restoran (10%)</span>
-              <span>{formatRupiah(amounts.tax)}</span>
-            </div>
-            <div className="mt-2 flex justify-between border-t border-tan-200 pt-3 text-lg font-bold text-brown-800">
+          {/* Rincian biaya — tanpa pajak (harga sudah termasuk pajak). */}
+          <section className="mt-6 rounded-2xl border border-tan-200 bg-cream-100 p-5">
+            <div className="flex justify-between text-lg font-bold text-brown-800">
               <span>Total</span>
               <span className="text-accent">{formatRupiah(amounts.total)}</span>
             </div>
+            <p className="mt-1 text-xs text-brown-400">Harga sudah termasuk pajak.</p>
           </section>
 
           {error && (
@@ -178,7 +174,7 @@ function CheckoutForm() {
             </p>
           )}
 
-          {/* Tombol Pesan & Bayar (sticky bawah) */}
+          {/* Tombol Pesan (sticky bawah) */}
           <div className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-[480px] border-t border-tan-200 bg-white px-5 py-4 shadow-[0_-4px_20px_rgba(92,61,46,0.08)]">
             <button
               type="button"
@@ -186,7 +182,7 @@ function CheckoutForm() {
               disabled={submitting || !tableValid}
               className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brown-600 py-4 text-lg font-bold text-cream-50 shadow-sm transition-all hover:bg-brown-800 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {submitting ? "Memproses…" : "Pesan & Bayar"}
+              {submitting ? "Memproses…" : "Pesan Sekarang"}
             </button>
           </div>
         </>
