@@ -42,15 +42,32 @@ function statusLabel(status: string): { text: string; cls: string } {
 // Aksi berikutnya yang bisa dilakukan admin untuk memajukan order.
 // pending -> "Proses Pesanan" -> preparing -> "Sudah Dibayar" -> paid ->
 // "Selesai" -> completed. (RLS hanya mengizinkan target preparing/paid/completed.)
+// `cls` memberi warna tombol berbeda & intuitif per tahap agar admin cepat
+// membaca aksi: terracotta (baru, butuh diproses) → cokelat (konfirmasi bayar)
+// → hijau (selesaikan).
 type NextStatus = "preparing" | "paid" | "completed";
-function nextAction(status: string): { label: string; next: NextStatus } | null {
+function nextAction(
+  status: string,
+): { label: string; next: NextStatus; cls: string } | null {
   switch (status) {
     case "pending":
-      return { label: "Proses Pesanan", next: "preparing" };
+      return {
+        label: "Proses Pesanan",
+        next: "preparing",
+        cls: "bg-accent hover:bg-[#b06d35]",
+      };
     case "preparing":
-      return { label: "Sudah Dibayar", next: "paid" };
+      return {
+        label: "Sudah Dibayar",
+        next: "paid",
+        cls: "bg-brown-600 hover:bg-brown-800",
+      };
     case "paid":
-      return { label: "Selesai", next: "completed" };
+      return {
+        label: "Selesai",
+        next: "completed",
+        cls: "bg-[#6FA86A] hover:bg-[#5d9457]",
+      };
     default:
       return null;
   }
@@ -236,7 +253,7 @@ export default function OrdersPage() {
                       type="button"
                       onClick={() => advance(order.id, action.next)}
                       disabled={busyId === order.id}
-                      className="w-full rounded-xl bg-brown-600 py-2.5 text-sm font-bold text-cream-50 transition-colors hover:bg-brown-800 disabled:cursor-not-allowed disabled:opacity-50"
+                      className={`w-full rounded-xl py-2.5 text-sm font-bold text-cream-50 transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${action.cls}`}
                     >
                       {busyId === order.id ? "Menyimpan…" : action.label}
                     </button>
