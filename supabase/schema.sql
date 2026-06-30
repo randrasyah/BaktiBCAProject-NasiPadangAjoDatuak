@@ -25,7 +25,7 @@
 create table if not exists menu_items (
   id           uuid primary key default gen_random_uuid(),
   name         text not null,
-  category     text not null check (category in ('Paket','Mandatory','Lauk','Minuman')),
+  category     text not null check (category in ('Paket','Mandatory','Lauk','Tambahan','Minuman')),
   price        integer not null default 15000,   -- rupiah, integer (tanpa desimal)
   is_available boolean not null default true,     -- untuk fitur sold-out [OPTIONAL]
   sort_order   integer default 0,                 -- urutan tampil dalam kategori
@@ -98,6 +98,16 @@ select * from (values
   ('Ayam Cabe Ijo',                'Lauk',      15000,  5, '/menu/ayam-sambal-ijo.jpg'),
   ('Ayam Balado',                  'Lauk',      15000,  6, '/menu/ayam-balado.jpg'),
   ('Ayam Gulai',                   'Lauk',      15000,  7, null), -- belum ada foto
+  -- Lauk (item baru tanpa foto — 2026-06-30)
+  ('Kikil',                        'Lauk',      25000, 17, null),
+  ('Telor Bulat',                  'Lauk',       8000, 18, null),
+  ('Dendeng Balado',              'Lauk',      18000, 19, null),
+  ('Ayam Kecap',                   'Lauk',      18000, 20, null),
+  ('Ikan Nila Bakar',             'Lauk',      15000, 21, null),
+  -- Tambahan (tanpa foto — 2026-06-30; tampil setelah Lauk, sebelum Minuman)
+  ('Paru Goreng',                  'Tambahan',  18000,  1, null),
+  ('Kerupuk Kulit',                'Tambahan',   5000,  2, null),
+  ('Kerupuk Kaleng',               'Tambahan',   3000,  3, null),
   -- Lauk (item baru dari foto)
   ('Ayam Bakar',                   'Lauk',      15000,  8, '/menu/ayam-bakar.jpg'),
   ('Ayam Goreng',                  'Lauk',      15000,  9, '/menu/ayam-goreng.jpg'),
@@ -115,7 +125,8 @@ select * from (values
   ('Teh Hangat',                   'Minuman',   15000,  3, null),
   ('Teh Hangat Manis',             'Minuman',   15000,  4, null),
   ('Air Putih',                    'Minuman',   15000,  5, null),
-  ('Es Jeruk',                     'Minuman',   15000,  6, null)
+  ('Es Jeruk',                     'Minuman',   15000,  6, null),
+  ('Aqua',                         'Minuman',    5000,  7, null)
 ) as seed(name, category, price, sort_order, image_url)
 where not exists (select 1 from menu_items);
 

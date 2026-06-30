@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { MENU_CATEGORIES, type MenuItem } from "@ajo/shared";
+import { MENU_CATEGORIES, CATEGORY_LABELS, type MenuItem } from "@ajo/shared";
 import { createAnonClient } from "../lib/supabase";
 import { MenuCard } from "../components/MenuCard";
 import { CartBar } from "../components/CartBar";
@@ -78,7 +78,7 @@ export default async function MenuPage({
           byCategory.map((group) => (
             <section key={group.category} className="mb-8">
               <h2 className="mb-4 border-b border-tan-200 pb-2 text-2xl font-semibold text-brown-800">
-                {group.category}
+                {CATEGORY_LABELS[group.category]}
               </h2>
               <div className="grid grid-cols-2 gap-4">
                 {group.items.map((item) => (

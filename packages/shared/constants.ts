@@ -20,12 +20,25 @@ export const ORDER_STATUSES = [
 
 // Kategori menu — harus sama persis dengan CHECK di tabel menu_items (schema.sql §1.1)
 // dan urutan tampil di halaman menu (CLAUDE.md §5.1).
+// 'Tambahan' ditambahkan 2026-06-30 (tampil setelah Lauk, sebelum Minuman).
 export const MENU_CATEGORIES = [
   "Paket",
   "Mandatory",
   "Lauk",
+  "Tambahan",
   "Minuman",
 ] as const;
+
+// Judul section yang DITAMPILKAN ke pelanggan per kategori. Berbeda dari nilai
+// kategori di DB (yang dipakai sebagai enum). Default = nama kategori itu sendiri;
+// override hanya untuk yang butuh teks berbeda. (2026-06-30)
+export const CATEGORY_LABELS: Record<(typeof MENU_CATEGORIES)[number], string> = {
+  Paket: "Paket Mahasiswa (WAJIB menunjukan KTM)",
+  Mandatory: "Mandatory",
+  Lauk: "Lauk",
+  Tambahan: "Tambahan",
+  Minuman: "Minuman",
+};
 
 // Harga placeholder seragam semua item (CLAUDE.md §2 poin 4).
 export const DEFAULT_PRICE = 15000;
